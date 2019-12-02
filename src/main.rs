@@ -1,20 +1,19 @@
-mod boilerplate;
 mod day1;
+// mod day2;
 
-use boilerplate::{assert_level, process_level};
+pub fn process_level<F>(fun: F, level: usize, part: usize)
+where
+    F: Fn(&str) -> String,
+{
+    let input =
+        std::fs::read_to_string(format!("./input/level{}.txt", level)).expect("reading input");
+    let output = fun(&input);
+    println!("level {}, part {}: {}", level, part, output);
+}
 
 fn main() {
-    assert_level(
-        day1::part1,
-        "12 14 1969 100756",
-        &(2 + 2 + 654 + 33583).to_string(),
-    );
     process_level(day1::part1, 1, 1);
-
-    assert_level(
-        day1::part2,
-        "14 1969 100756",
-        &(2 + 966 + 50346).to_string(),
-    );
     process_level(day1::part2, 1, 2);
+
+    // process_level(day2::part1, 2, 1);
 }

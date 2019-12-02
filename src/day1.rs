@@ -1,5 +1,3 @@
-//! # Level1
-
 /// Take its mass, divide by three, round down, and subtract 2.
 /// Any mass that would require negative fuel should instead be treated as
 /// if it requires zero fuel.
@@ -22,19 +20,36 @@ fn fuel_for_mass_recursive(mut mass: isize) -> isize {
     }
 }
 
-use crate::boilerplate::Input;
+#[test]
+fn test_part1() {
+    assert_eq!(fuel_for_mass(12), 2);
+    assert_eq!(fuel_for_mass(14), 2);
+    assert_eq!(fuel_for_mass(1969), 654);
+    assert_eq!(fuel_for_mass(100756), 33583);
+}
+
+#[test]
+fn test_part2() {
+    assert_eq!(fuel_for_mass_recursive(14), 2);
+    assert_eq!(fuel_for_mass_recursive(1969), 966);
+    assert_eq!(fuel_for_mass_recursive(100756), 50346);
+}
+
+fn iter_num<'a>(input: &'a str) -> impl Iterator<Item = isize> + 'a {
+    input
+        .split_whitespace()
+        .map(|t| t.parse().expect("parsing number"))
+}
 
 pub fn part1(input: &str) -> String {
-    Input::new(input)
-        .iter_num()
+    iter_num(input)
         .map(fuel_for_mass)
         .sum::<isize>()
         .to_string()
 }
 
 pub fn part2(input: &str) -> String {
-    Input::new(input)
-        .iter_num()
+    iter_num(input)
         .map(fuel_for_mass_recursive)
         .sum::<isize>()
         .to_string()
