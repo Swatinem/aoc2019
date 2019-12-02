@@ -16,4 +16,5 @@ fn main() {
     process_level(day1::part2, 1, 2);
 
     process_level(day2::part1, 2, 1);
+    process_level(day2::part2, 2, 2);
 }

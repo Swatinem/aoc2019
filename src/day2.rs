@@ -76,3 +76,22 @@ pub fn part1(input: &str) -> String {
     // What value is left at position 0 after the program halts?
     mem[0].to_string()
 }
+
+pub fn part2(input: &str) -> String {
+    let mem = read_mem(input);
+
+    for noun in 0..=99 {
+        for verb in 0..=99 {
+            let mut mem = mem.clone();
+            mem[1] = noun;
+            mem[2] = verb;
+            execute_program(&mut mem);
+            // determine what pair of inputs produces the output 19690720.
+            if mem[0] == 19690720 {
+                return (100 * noun + verb).to_string();
+            }
+        }
+    }
+
+    String::from("not found :-(")
+}
