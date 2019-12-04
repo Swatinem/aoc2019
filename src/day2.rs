@@ -39,7 +39,7 @@ fn execute_program(memory: &mut [usize]) -> &[usize] {
 }
 
 #[test]
-fn test_part1() {
+fn test_day2() {
     let mut mem = vec![1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50];
     assert_eq!(
         execute_program(&mut mem),
