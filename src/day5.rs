@@ -23,10 +23,28 @@ enum ArithmeticOp {
     Multiply,
 }
 
+enum JumpOp {
+    IfNotZero,
+    IfZero,
+}
+
+enum RelationOp {
+    LessThan,
+    Equal,
+}
+
 enum Instruction {
     Arithmetic(ArithmeticOp, Parameter, Parameter, Parameter),
     Input(Parameter),
     Output(Parameter),
+    Jump(JumpOp, Parameter, Parameter),
+    Relation(RelationOp, Parameter, Parameter, Parameter),
+    Halt,
+}
+
+enum InstructionResult {
+    Normal(usize),
+    Jump(usize),
     Halt,
 }
 
@@ -56,21 +74,37 @@ impl Instruction {
             }
             3 => Instruction::Input(decode_param(1)),
             4 => Instruction::Output(decode_param(1)),
+            5 | 6 => {
+                let op = if code == 5 {
+                    JumpOp::IfNotZero
+                } else {
+                    JumpOp::IfZero
+                };
+                Instruction::Jump(op, decode_param(1), decode_param(2))
+            }
+            7 | 8 => {
+                let op = if code == 7 {
+                    RelationOp::LessThan
+                } else {
+                    RelationOp::Equal
+                };
+                Instruction::Relation(op, decode_param(1), decode_param(2), decode_param(3))
+            }
             99 => Instruction::Halt,
             _ => panic!("invalid opcode"),
         }
     }
 
-    fn execute(&self, computer: &mut Computer) -> usize {
+    fn execute(&self, computer: &mut Computer) -> InstructionResult {
         match self {
-            Instruction::Halt => 0,
+            Instruction::Halt => InstructionResult::Halt,
             Instruction::Input(p) => {
                 p.write(&mut computer.memory, computer.input);
-                2
+                InstructionResult::Normal(2)
             }
             Instruction::Output(p) => {
                 computer.output = p.read(&computer.memory);
-                2
+                InstructionResult::Normal(2)
             }
             Instruction::Arithmetic(op, lhs, rhs, dst) => {
                 let lhs = lhs.read(&computer.memory);
@@ -80,7 +114,27 @@ impl Instruction {
                     ArithmeticOp::Multiply => lhs * rhs,
                 };
                 dst.write(&mut computer.memory, result);
-                4
+                InstructionResult::Normal(4)
+            }
+            Instruction::Relation(op, lhs, rhs, dst) => {
+                let lhs = lhs.read(&computer.memory);
+                let rhs = rhs.read(&computer.memory);
+                let result = match op {
+                    RelationOp::Equal if lhs == rhs => 1,
+                    RelationOp::LessThan if lhs < rhs => 1,
+                    _ => 0,
+                };
+                dst.write(&mut computer.memory, result);
+                InstructionResult::Normal(4)
+            }
+            Instruction::Jump(op, value, jump) => {
+                let value = value.read(&computer.memory);
+                let jump = jump.read(&computer.memory) as usize;
+                match op {
+                    JumpOp::IfNotZero if value != 0 => InstructionResult::Jump(jump),
+                    JumpOp::IfZero if value == 0 => InstructionResult::Jump(jump),
+                    _ => InstructionResult::Normal(3),
+                }
             }
         }
     }
@@ -116,17 +170,55 @@ impl Computer {
         let mut pc = 0;
         loop {
             let inst = Instruction::decode(&self.memory, pc);
-            let width = inst.execute(self);
-            if width == 0 {
-                return self.output;
+            let result = inst.execute(self);
+            match result {
+                InstructionResult::Halt => return self.output,
+                InstructionResult::Normal(width) => pc += width,
+                InstructionResult::Jump(to) => pc = to,
             }
-            pc += width;
         }
     }
 }
 
 #[test]
-fn test_day5() {}
+fn test_day5() {
+    fn run_test(mem: &str, input: isize) -> isize {
+        let mut c = Computer::new_with_input(mem, input);
+        c.run()
+    }
+
+    // equal to 8
+    assert_eq!(run_test("3,9,8,9,10,9,4,9,99,-1,8", 7), 0);
+    assert_eq!(run_test("3,9,8,9,10,9,4,9,99,-1,8", 8), 1);
+    assert_eq!(run_test("3,9,8,9,10,9,4,9,99,-1,8", 9), 0);
+
+    // less than 8
+    assert_eq!(run_test("3,9,7,9,10,9,4,9,99,-1,8", 7), 1);
+    assert_eq!(run_test("3,9,7,9,10,9,4,9,99,-1,8", 8), 0);
+    assert_eq!(run_test("3,9,7,9,10,9,4,9,99,-1,8", 9), 0);
+
+    // equal to 8
+    assert_eq!(run_test("3,3,1108,-1,8,3,4,3,99", 7), 0);
+    assert_eq!(run_test("3,3,1108,-1,8,3,4,3,99", 8), 1);
+    assert_eq!(run_test("3,3,1108,-1,8,3,4,3,99", 9), 0);
+
+    // less than 8
+    assert_eq!(run_test("3,3,1107,-1,8,3,4,3,99", 7), 1);
+    assert_eq!(run_test("3,3,1107,-1,8,3,4,3,99", 8), 0);
+    assert_eq!(run_test("3,3,1107,-1,8,3,4,3,99", 9), 0);
+
+    // zero / nonzero
+    assert_eq!(run_test("3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9", 0), 0);
+    assert_eq!(run_test("3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9", 100), 1);
+    assert_eq!(run_test("3,3,1105,-1,9,1101,0,0,12,4,12,99,1", 0), 0);
+    assert_eq!(run_test("3,3,1105,-1,9,1101,0,0,12,4,12,99,1", 100), 1);
+
+    // more complex one…
+    let complex = "3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99";
+    assert_eq!(run_test(complex, 7), 999);
+    assert_eq!(run_test(complex, 8), 1000);
+    assert_eq!(run_test(complex, 9), 1001);
+}
 
 pub fn part1(input: &str) -> String {
     let mut c = Computer::new_with_input(input, 1);
@@ -134,6 +226,8 @@ pub fn part1(input: &str) -> String {
     result.to_string()
 }
 
-pub fn part2(_input: &str) -> String {
-    "".into()
+pub fn part2(input: &str) -> String {
+    let mut c = Computer::new_with_input(input, 5);
+    let result = c.run();
+    result.to_string()
 }
