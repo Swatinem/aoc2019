@@ -5,7 +5,12 @@ fn test_day6() {
     assert_eq!(
         part1("COM)B\nB)C\nC)D\nD)E\nE)F\nB)G\nG)H\nD)I\nE)J\nJ)K\nK)L"),
         "42"
-    )
+    );
+
+    assert_eq!(
+        part2("COM)B\nB)C\nC)D\nD)E\nE)F\nB)G\nG)H\nD)I\nE)J\nJ)K\nK)L\nK)YOU\nI)SAN"),
+        "4"
+    );
 }
 
 #[derive(Debug)]
@@ -33,7 +38,7 @@ fn traverse_subtree<'a>(
     }
 }
 
-pub fn part1(input: &str) -> String {
+fn read_objects<'a>(input: &'a str) -> HashMap<&'a str, Object<'a>> {
     let direct_orbits = input.trim().lines().map(|line| {
         let mut pair = line.split(')');
         (
@@ -65,19 +70,72 @@ pub fn part1(input: &str) -> String {
     }
 
     // find the `root`, which is the node that has no parent
-    let root = objects
-        .values()
-        .find(|e| e.parent.is_none())
-        .expect("expected a root node")
-        .name;
+    let root = find_root(&objects);
 
     // add `depth` everywhere
     traverse_subtree(&mut objects, root, 0);
+
+    objects
+}
+
+fn find_root<'a>(objects: &HashMap<&'a str, Object<'a>>) -> &'a str {
+    objects
+        .values()
+        .find(|e| e.parent.is_none())
+        .expect("expected a root node")
+        .name
+}
+
+pub fn part1(input: &str) -> String {
+    let objects = read_objects(input);
 
     // sum up all the depths
     objects.values().map(|n| n.depth).sum::<usize>().to_string()
 }
 
-pub fn part2(_input: &str) -> String {
-    "".into()
+fn trace_path<'a>(
+    objects: &HashMap<&'a str, Object<'a>>,
+    mut path: Vec<&'a str>,
+    name: &'a str,
+) -> Vec<&'a str> {
+    let node = &objects[name];
+    path.push(name);
+    match node.parent {
+        Some(parent) => trace_path(objects, path, parent),
+        None => {
+            path.reverse();
+            path
+        }
+    }
+}
+
+pub fn part2(input: &str) -> String {
+    let objects = read_objects(input);
+
+    // so, since this is a tree, we just need to find the first common ancestor…
+    let mut path_to_you = trace_path(&objects, vec![], "YOU");
+    let mut path_to_san = trace_path(&objects, vec![], "SAN");
+
+    let common_ancestor = path_to_san
+        .iter()
+        .zip(path_to_you.iter())
+        .take_while(|(a, b)| a == b)
+        .last()
+        .unwrap()
+        .0
+        .clone(); // <- say whaaaat? I need to clone the `&str` because otherwise
+                  // I can’t pop from `path_to_san`?
+
+    // and essentially, the number of traversals is:
+    // depth of first parent of YOU relative to common ancestor
+    // +
+    // depth of first parent of SAN relative to common ancestor
+    path_to_you.pop();
+    path_to_san.pop();
+    let common_depth = objects[common_ancestor].depth;
+    let traversals = objects[path_to_san.last().unwrap()].depth - common_depth
+        + objects[path_to_you.last().unwrap()].depth
+        - common_depth;
+
+    traversals.to_string()
 }
