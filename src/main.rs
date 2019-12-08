@@ -7,6 +7,7 @@ mod day4;
 mod day5;
 mod day6;
 mod day7;
+mod day8;
 
 pub fn process_level<F>(fun: F, level: usize, part: usize)
 where
@@ -39,4 +40,7 @@ fn main() {
 
     process_level(day7::part1, 7, 1);
     process_level(day7::part2, 7, 2);
+
+    process_level(day8::part1, 8, 1);
+    process_level(day8::part2, 8, 2);
 }
