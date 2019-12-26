@@ -84,10 +84,7 @@ pub fn part1(input: &str) -> String {
         while !amplifiers.is_empty() {
             let mut amplifier = amplifiers.pop().unwrap();
             amplifier.push_input(current_output);
-            current_output = match amplifier.run() {
-                RunResult::Completed(value) => value,
-                RunResult::Waiting => panic!("expected computer to complete"),
-            };
+            current_output = amplifier.run_to_halt();
         }
 
         max_output = max_output.max(current_output);
@@ -126,7 +123,7 @@ pub fn part2(input: &str) -> String {
                     }
                     value
                 }
-                RunResult::Waiting => amplifier.get_output().expect("expected outout"),
+                RunResult::Waiting => amplifier.pop_output().expect("expected outout"),
             };
             // start from the front again
             current_amplifier = current_amplifier % amplifiers.len();

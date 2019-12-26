@@ -1,13 +1,10 @@
-use crate::computer::{Computer, RunResult};
+use crate::computer::Computer;
 
 #[test]
 fn test_day5() {
     fn run_test(mem: &str, input: isize) -> isize {
         let mut c = Computer::new_with_input(mem, input);
-        match c.run() {
-            RunResult::Completed(value) => value,
-            _ => panic!("computer should halt"),
-        }
+        c.run_to_halt()
     }
 
     // equal to 8
@@ -45,18 +42,12 @@ fn test_day5() {
 
 pub fn part1(input: &str) -> String {
     let mut c = Computer::new_with_input(input, 1);
-    let result = match c.run() {
-        RunResult::Completed(value) => value,
-        _ => panic!("computer should halt"),
-    };
+    let result = c.run_to_halt();
     result.to_string()
 }
 
 pub fn part2(input: &str) -> String {
     let mut c = Computer::new_with_input(input, 5);
-    let result = match c.run() {
-        RunResult::Completed(value) => value,
-        _ => panic!("computer should halt"),
-    };
+    let result = c.run_to_halt();
     result.to_string()
 }

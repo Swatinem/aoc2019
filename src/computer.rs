@@ -3,20 +3,28 @@ use std::collections::VecDeque;
 enum Parameter {
     Position(usize),
     Immediate(isize),
+    Relative(isize),
 }
 
 impl Parameter {
-    fn read(&self, memory: &[isize]) -> isize {
-        match self {
-            Parameter::Immediate(value) => *value,
-            Parameter::Position(addr) => memory[*addr],
-        }
+    fn read(&self, computer: &Computer) -> isize {
+        let addr = match self {
+            Parameter::Immediate(value) => return *value,
+            Parameter::Position(addr) => *addr,
+            Parameter::Relative(offset) => (computer.relative_base + *offset) as usize,
+        };
+        return computer.memory.get(addr).map(|x| *x).unwrap_or(0);
     }
-    fn write(&self, memory: &mut [isize], value: isize) {
-        match self {
-            Parameter::Position(addr) => memory[*addr] = value,
+    fn write(&self, computer: &mut Computer, value: isize) {
+        let addr = match self {
+            Parameter::Position(addr) => *addr,
+            Parameter::Relative(offset) => (computer.relative_base + *offset) as usize,
             _ => panic!("writing to an Immediate parameter"),
-        }
+        };
+        computer
+            .memory
+            .resize(computer.memory.len().max(addr + 1), 0);
+        computer.memory[addr] = value;
     }
 }
 
@@ -41,6 +49,7 @@ enum Instruction {
     Output(Parameter),
     Jump(JumpOp, Parameter, Parameter),
     Relation(RelationOp, Parameter, Parameter, Parameter),
+    AdjustBase(Parameter),
     Halt,
 }
 
@@ -59,10 +68,11 @@ impl Instruction {
         let decode_param = |n: u32| {
             let value = memory[offset + n as usize];
             let mode = param_modes / (10isize.pow(n - 1)) % 10;
-            if mode == 1 {
-                Parameter::Immediate(value)
-            } else {
-                Parameter::Position(value as usize)
+            match mode {
+                0 => Parameter::Position(value as usize),
+                1 => Parameter::Immediate(value),
+                2 => Parameter::Relative(value as isize),
+                _ => panic!("unknown parameter mode"),
             }
         };
 
@@ -93,6 +103,7 @@ impl Instruction {
                 };
                 Instruction::Relation(op, decode_param(1), decode_param(2), decode_param(3))
             }
+            9 => Instruction::AdjustBase(decode_param(1)),
             99 => Instruction::Halt,
             _ => panic!("invalid opcode"),
         }
@@ -103,44 +114,48 @@ impl Instruction {
             Instruction::Halt => InstructionResult::Halt,
             Instruction::Input(p) => match computer.input.pop_front() {
                 Some(value) => {
-                    p.write(&mut computer.memory, value);
+                    p.write(computer, value);
                     InstructionResult::Normal(2)
                 }
                 None => InstructionResult::Waiting,
             },
             Instruction::Output(p) => {
-                computer.output.push_back(p.read(&computer.memory));
+                computer.output.push_back(p.read(computer));
                 InstructionResult::Normal(2)
             }
             Instruction::Arithmetic(op, lhs, rhs, dst) => {
-                let lhs = lhs.read(&computer.memory);
-                let rhs = rhs.read(&computer.memory);
+                let lhs = lhs.read(computer);
+                let rhs = rhs.read(computer);
                 let result = match op {
                     ArithmeticOp::Add => lhs + rhs,
                     ArithmeticOp::Multiply => lhs * rhs,
                 };
-                dst.write(&mut computer.memory, result);
+                dst.write(computer, result);
                 InstructionResult::Normal(4)
             }
             Instruction::Relation(op, lhs, rhs, dst) => {
-                let lhs = lhs.read(&computer.memory);
-                let rhs = rhs.read(&computer.memory);
+                let lhs = lhs.read(computer);
+                let rhs = rhs.read(computer);
                 let result = match op {
                     RelationOp::Equal if lhs == rhs => 1,
                     RelationOp::LessThan if lhs < rhs => 1,
                     _ => 0,
                 };
-                dst.write(&mut computer.memory, result);
+                dst.write(computer, result);
                 InstructionResult::Normal(4)
             }
             Instruction::Jump(op, value, jump) => {
-                let value = value.read(&computer.memory);
-                let jump = jump.read(&computer.memory) as usize;
+                let value = value.read(computer);
+                let jump = jump.read(computer) as usize;
                 match op {
                     JumpOp::IfNotZero if value != 0 => InstructionResult::Jump(jump),
                     JumpOp::IfZero if value == 0 => InstructionResult::Jump(jump),
                     _ => InstructionResult::Normal(3),
                 }
+            }
+            Instruction::AdjustBase(value) => {
+                computer.relative_base += value.read(computer);
+                InstructionResult::Normal(2)
             }
         }
     }
@@ -155,6 +170,7 @@ pub enum RunResult {
 pub struct Computer {
     memory: Vec<isize>,
     pc: usize,
+    relative_base: isize,
     input: VecDeque<isize>,
     output: VecDeque<isize>,
 }
@@ -169,6 +185,7 @@ impl Computer {
         Computer {
             memory,
             pc: 0,
+            relative_base: 0,
             input: VecDeque::new(),
             output: VecDeque::new(),
         }
@@ -184,8 +201,13 @@ impl Computer {
         self.input.push_back(input);
     }
 
-    pub fn get_output(&mut self) -> Option<isize> {
+    pub fn pop_output(&mut self) -> Option<isize> {
         self.output.pop_front()
+    }
+
+    #[cfg(test)]
+    pub fn output(&self) -> &VecDeque<isize> {
+        &self.output
     }
 
     pub fn run(&mut self) -> RunResult {
@@ -195,15 +217,20 @@ impl Computer {
             match result {
                 InstructionResult::Waiting => return RunResult::Waiting,
                 InstructionResult::Halt => {
-                    // TODO: hm, not sure, but do we ever need to get the non-most-recent output?
-                    let most_recent_output =
-                        self.output.pop_back().expect("halting without output");
-                    self.output.clear();
+                    let most_recent_output = *self.output.back().expect("halting without output");
+
                     return RunResult::Completed(most_recent_output);
                 }
                 InstructionResult::Normal(width) => self.pc += width,
                 InstructionResult::Jump(to) => self.pc = to,
             }
+        }
+    }
+
+    pub fn run_to_halt(&mut self) -> isize {
+        match self.run() {
+            RunResult::Completed(value) => value,
+            RunResult::Waiting => panic!("expected computer to complete"),
         }
     }
 }
